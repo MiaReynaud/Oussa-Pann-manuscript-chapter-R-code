@@ -1903,7 +1903,7 @@ p1 + p2 +
 # PROJECTIONS DANS LE JEU
 ##################################################################################
 
-### "La pêche"
+### Le territoire : le plateau devient le territoire réel
 # pourcentage de joueur·euses sur chaque localisation au premier tour
 
 dd %>%
@@ -1984,6 +1984,137 @@ cat("p =", format.pval(test$p.value), "\n")
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+### Figure x. Évolution de la répartition spatiale des activités au cours des tours de jeu. 
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+# Couleurs pour chaque localisation
+cols <- c(
+  "village" = "#B26E6E",
+  "rouge"   = "#C00000",
+  "vert"    = "#70AD47",
+  "jaune"   = "#FFC000"
+)
+
+# On filtre sur les villages présents dans tes données (Niodior et éventuellement d'autres)
+dd2 <- dd %>%
+  filter(!is.na(village)) %>%
+  mutate(
+    localisation = factor(
+      localisation,
+      levels = c("village", "jaune", "vert", "rouge")
+    )
+  )
+
+# Fonction pour calculer les proportions
+get_prop <- function(data, by_village = TRUE){
+  
+  if(by_village){
+    data %>%
+      dplyr::count(village, annee, localisation) %>%
+      group_by(village, annee) %>%
+      mutate(prop = n / sum(n)) %>%
+      ungroup()
+    
+  } else {
+    data %>%
+      dplyr::count(annee, localisation) %>%
+      group_by(annee) %>%
+      mutate(prop = n / sum(n)) %>%
+      ungroup()
+  }
+}
+
+prop_data <- get_prop(dd2, TRUE)
+prop_global <- get_prop(dd2, FALSE)
+
+# Fonction pour tracer les graphiques empilés
+plot_stack <- function(data, title_text){
+  
+  data <- data %>%
+    mutate(
+      localisation = factor(
+        localisation,
+        levels = c("village","jaune","vert","rouge")
+      )
+    ) %>%
+    arrange(annee, localisation) %>%
+    group_by(annee) %>%
+    mutate(
+      ymax = cumsum(prop),
+      ymin = ymax - prop
+    ) %>%
+    ungroup()
+  
+  ggplot(
+    data,
+    aes(
+      x = annee,
+      ymin = ymin,
+      ymax = ymax,
+      fill = localisation
+    )
+  ) +
+    geom_ribbon(
+      colour = "white",
+      linewidth = 0.3
+    ) +
+    scale_fill_manual(
+      values = cols,
+      labels = c(
+        rouge = "Zone rouge",
+        vert = "Zone verte",
+        jaune = "Zone jaune",
+        village = "Village"
+      )
+    ) +
+    scale_x_continuous(breaks = 1:8) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      limits = c(0,1)
+    ) +
+    labs(
+      title = title_text,
+      x = "Tour",
+      y = "Proportion de choix",
+      fill = NULL
+    ) +
+    theme_bw(base_size = 13) +
+    theme(
+      plot.title = element_text(face="bold"),
+      legend.position = "bottom"
+    )
+}
+
+# Création des graphiques
+g_global <- plot_stack(prop_global, "Toutes les sessions")
+g_niodior <- prop_data %>%
+  filter(village == "Niodior") %>%
+  plot_stack("Niodior")
+g_falia <- prop_data %>% filter(village == "Falia") %>% plot_stack("Falia")
+
+# Affichage
+(g_global + g_falia + g_niodior) +
+  plot_layout(
+    ncol = 3,
+    guides = "collect"
+  ) &
+  theme(
+    legend.position = "bottom"
+  )
+#
 
 
 
