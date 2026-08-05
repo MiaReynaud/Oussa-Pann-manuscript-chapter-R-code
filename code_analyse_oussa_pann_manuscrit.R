@@ -928,6 +928,508 @@ final_plot
 
 
 
+##################################################################################
+# DYNAMIQUES D'EXPLOITATION
+##################################################################################
+
+### Figure. Pourcentage de joueuses au village par partie et par tour
+library(dplyr)
+library(ggplot2)
+
+village_prop <- dd %>%
+  group_by(id_partie, village, annee) %>%
+  summarise(
+    prop_village = mean(localisation == "village"),
+    .groups = "drop"
+  )
+
+# Moyenne par village
+courbes_village <- village_prop %>%
+  group_by(village, annee) %>%
+  summarise(
+    moyenne = mean(prop_village),
+    se = sd(prop_village)/sqrt(n()),
+    .groups = "drop"
+  )
+
+# Courbe "ensemble"
+courbe_totale <- village_prop %>%
+  group_by(annee) %>%
+  summarise(
+    moyenne = mean(prop_village),
+    se = sd(prop_village)/sqrt(n()),
+    .groups = "drop"
+  ) %>%
+  mutate(village = "Ensemble")
+
+# Fusion
+courbes <- bind_rows(courbes_village, courbe_totale)
+
+courbes$village <- factor(
+  courbes$village,
+  levels = c("Falia","Niodior","Ensemble")
+)
+
+# Figure
+ggplot(courbes,
+       aes(x = annee,
+           y = moyenne*100,
+           colour = village,
+           group = village)) +
+  
+  geom_line(linewidth = 1.2) +
+  
+  geom_point(size = 2.8) +
+  
+  geom_errorbar(aes(
+    ymin = (moyenne-se)*100,
+    ymax = (moyenne+se)*100),
+    width = 0.15
+  ) +
+  
+  scale_x_continuous(
+    breaks = 1:8
+  ) +
+  
+  scale_y_continuous(
+    limits = c(0,50),
+    breaks = seq(0,50,10),
+    expand = c(0,0)
+  ) +
+  
+  scale_colour_manual(values = c(
+    "Falia" = "#6A51A3",
+    "Niodior" = "#E76FAD",
+    "Ensemble" = "black"
+  )) +
+  
+  labs(
+    x = "Tour de jeu",
+    y = "Joueuses au village (%)",
+    colour = NULL
+  ) +
+  
+  theme_minimal(base_size = 14) +
+  
+  theme(
+    legend.position = "bottom",      # légende en dessous
+    legend.box.spacing = unit(0.1, "cm"),
+    legend.margin = margin(t = -1),
+    legend.direction = "horizontal",
+    
+    panel.grid.minor = element_blank(),
+    
+    panel.grid.major.x = element_line(
+      colour = "grey94",
+      linewidth = 0.3
+    ),
+    
+    panel.grid.major.y = element_line(
+      colour = "grey90",
+      linewidth = 0.35
+    ),
+    
+    axis.line = element_line(colour = "grey70"),
+    
+    axis.text = element_text(colour = "grey30"),
+    axis.title = element_text(colour = "grey20")
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Impact crise sur utilisation village
+# Pourcentage de décisions de pêche avant et après le tour 4
+library(dplyr)
+
+dd <- dd %>%
+  mutate(
+    peche = localisation != "village",
+    periode = ifelse(annee < 4, "Avant", "Apres")
+  )
+
+dd %>%
+  group_by(periode) %>%
+  summarise(
+    n = n(),
+    prop_peche = mean(peche),
+    prop_village = mean(localisation == "village")
+  )
+
+# Test de Wilcoxon apparié
+prop_partie <- dd %>%
+  group_by(id_partie, periode) %>%
+  summarise(
+    prop_peche = mean(peche),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(
+    names_from = periode,
+    values_from = prop_peche
+  )
+
+wilcox.test(
+  prop_partie$Avant,
+  prop_partie$Apres,
+  paired = TRUE
+)
+
+# GLM binomial : augmentation de l'utilisation du village
+glm_village <- glm(
+  I(localisation == "village") ~ annee,
+  family = binomial,
+  data = dd
+)
+
+summary(glm_village)
+
+anova(glm_village, test = "Chisq")
+
+coef(summary(glm_village))
+
+# Effet du village d'étude (Falia vs Niodior)
+glm_site <- glm(
+  I(localisation == "village") ~ village,
+  family = binomial,
+  data = dd
+)
+
+summary(glm_site)
+
+anova(glm_site, test = "Chisq")
+
+glm_site2 <- glm(
+  I(localisation == "village") ~ annee + village,
+  family = binomial,
+  data = dd
+)
+
+anova(glm_site2, test = "Chisq")
+summary(glm_site2)
+
+# Pourcentages descriptifs Falia / Niodior avant et après
+dd %>%
+  group_by(village, periode) %>%
+  summarise(
+    prop_village = mean(localisation == "village")*100,
+    n = n(),
+    .groups = "drop"
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################################################
+##################################################################################
+## REACTIONS INDIVIDUELLES
+##################################################################################
+##################################################################################
+
+## Figure. Les gains individuels cumulés par partie
+library(dplyr)
+library(ggplot2)
+
+## Préparation des données
+gains_cumules <- dd %>%
+  
+  group_by(village,
+           id_partie,
+           nom_personnage,
+           annee) %>%
+  
+  summarise(
+    gain = sum(quantite),
+    localisation = first(localisation),
+    .groups = "drop"
+  ) %>%
+  
+  arrange(id_partie, nom_personnage, annee) %>%
+  
+  group_by(village, id_partie, nom_personnage) %>%
+  
+  mutate(
+    gain_cumule = cumsum(gain),
+    type = ifelse(localisation == "village",
+                  "Village",
+                  "Pêche")
+  ) %>%
+  
+  ungroup()
+
+# Moyenne par partie
+moyenne_partie <- gains_cumules %>%
+  
+  group_by(village, id_partie, annee) %>%
+  
+  summarise(
+    gain_moyen = mean(gain_cumule),
+    .groups = "drop"
+  )
+
+
+# Nom des panneaux
+gains_cumules <- gains_cumules %>%
+  mutate(
+    partie = ifelse(
+      village == "Niodior",
+      paste0("P", id_partie, "N"),
+      paste0("P", id_partie, "F")
+    )
+  )
+
+moyenne_partie <- moyenne_partie %>%
+  mutate(
+    partie = ifelse(
+      village == "Niodior",
+      paste0("P", id_partie, "N"),
+      paste0("P", id_partie, "F")
+    )
+  )
+
+# Ordre des panneaux
+ordre <- gains_cumules %>%
+  distinct(id_partie, village, partie) %>%
+  arrange(id_partie, village) %>%
+  pull(partie)
+
+gains_cumules$partie <- factor(gains_cumules$partie,
+                               levels = ordre)
+
+moyenne_partie$partie <- factor(moyenne_partie$partie,
+                                levels = ordre)
+
+# Figure
+library(ggnewscale)
+
+ggplot(gains_cumules,
+       aes(annee, gain_cumule,
+           group = nom_personnage)) +
+  
+  geom_hline(
+    yintercept = 40,
+    colour = "grey70",
+    linetype = "dashed"
+  ) +
+  
+  geom_line(
+    colour = "grey80",
+    linewidth = 0.4
+  ) +
+  
+  geom_point(
+    aes(colour = type),
+    size = 1.2,
+    alpha = 0.7
+  ) +
+  
+  scale_colour_manual(
+    name = "Origine du gain :",
+    values = c(
+      "Pêche" = "#2E8B57",
+      "Village" = "#E69F00"
+    )
+  ) +
+  
+  ggnewscale::new_scale_colour() +
+  
+  geom_line(
+    data = moyenne_partie,
+    aes(
+      annee,
+      gain_moyen,
+      group = 1,
+      colour = "Moyenne"
+    ),
+    inherit.aes = FALSE,
+    linewidth = 0.7
+  ) +
+  
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Moyenne" = "black"
+    )
+  ) +
+  
+  facet_wrap(~partie,
+             ncol = 4) +
+  
+  scale_x_continuous(
+    breaks = 1:8
+  ) +
+  
+  coord_cartesian(
+    ylim = c(0, 20)
+  ) +
+  
+  labs(
+    x = "Tour de jeu",
+    y = "Gains cumulés"
+  ) +
+  
+  theme_minimal(base_size = 12) +
+  
+  theme(
+    legend.position = "bottom",
+    
+    panel.grid.minor = element_blank(),
+    
+    panel.grid.major = element_line(
+      colour = "grey92",
+      linewidth = 0.3
+    ),
+    
+    legend.title = element_text(
+      size = 10,
+      face = "plain"
+    ),
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    legend.box.spacing = unit(-0.0, "cm"),
+    legend.spacing.x = unit(1.5, "cm"),
+    
+    strip.text = element_text(
+      face = "bold",
+      size = 10
+    ),
+    
+    legend.box = "horizontal"
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
