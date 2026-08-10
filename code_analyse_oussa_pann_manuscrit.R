@@ -3699,38 +3699,97 @@ scale_fill_manual(
 ##################################################################################
 ##################################################################################
 
+# Pénibilité moyenne selon le tour de jeu et le village
+library(ggplot2)
+library(dplyr)
+library(scales)
 
+dd_penibilite <- dd %>%
+  filter(
+    !is.na(annee),
+    !is.na(penibilite),
+    !is.na(village),
+    village %in% c("Falia", "Niodior")
+  ) %>%
+  mutate(
+    annee = as.numeric(annee),
+    penibilite = as.numeric(penibilite),
+    village = factor(
+      village,
+      levels = c("Falia", "Niodior")
+    )
+  )
 
+moyenne_penibilite <- dd_penibilite %>%
+  group_by(village, annee) %>%
+  summarise(
+    moyenne_penibilite = mean(penibilite, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
 
+fig_penibilite <- ggplot(
+  moyenne_penibilite,
+  aes(
+    x = annee,
+    y = moyenne_penibilite,
+    color = village
+  )
+) +
+  
+  # Points
+  geom_point(
+    size = 3
+  ) +
+  
+  # Relier les points d'un même village
+  geom_line(
+    aes(group = village),
+    linewidth = 0.8
+  ) +
+  
+  # Couleurs des villages
+  scale_color_manual(
+    values = c(
+      "Falia" = "#6A51A3",
+      "Niodior" = "#E76FAD"
+    )
+  ) +
+  
+  # Axe Y : proportion de joueuses avec pénibilité
+  scale_y_continuous(
+    limits = c(0, 0.6),
+    breaks = seq(0, 1, 0.2),
+    labels = percent_format(accuracy = 1)
+  ) +
+  
+  # Axe X
+  scale_x_continuous(
+    breaks = sort(unique(moyenne_penibilite$annee))
+  ) +
+  
+  labs(
+    x = "Tour de jeu",
+    y = "Pénibilité moyenne",
+    color = "Village"
+  ) +
+  
+  # Thème adapté à un manuscrit
+  theme_classic(base_size = 13) +
+  
+  theme(
+    axis.title = element_text(size = 14),
+    axis.text = element_text(
+      size = 12,
+      colour = "black"
+    ),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 12),
+    legend.position = "right"
+  )
 
-
-
-
-
-
-
-
-
+fig_penibilite
 #
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
