@@ -2674,6 +2674,778 @@ g_falia <- prop_data %>% filter(village == "Falia") %>% plot_stack("Falia")
 
 
 
+##################################################################################
+##################################################################################
+##################################################################################
+## DYNAMIQUES COLLECTIVES
+##################################################################################
+##################################################################################
+##################################################################################
+
+##################################################################################
+##################################################################################
+# UNE COORDINATION SANS PLANIFICATION
+##################################################################################
+##################################################################################
+
+##################################################################################
+#  UNE COORDINATION
+##################################################################################
+
+# Rassemblement spatial
+library(dplyr)
+
+# Compter le nombre de joueur·euses par tour (id_partie + annee) et par localisation
+tours_loc <- dd %>%
+  group_by(id_partie, annee, localisation) %>%
+  summarise(nb_joueuses = n(), .groups = "drop")
+
+# Pour chaque tour, vérifier si toutes les joueur·euses sont dans la même localisation
+toutes_meme_loc <- tours_loc %>%
+  group_by(id_partie, annee) %>%
+  summarise(
+    total_joueuses = sum(nb_joueuses),
+    nb_loc_uniques = n(),
+    .groups = "drop"
+  ) %>%
+  filter(nb_loc_uniques == 1) %>%  # Toutes dans la même localisation
+  nrow()  # Nombre de tours où toutes sont dans la même localisation
+
+# Pour chaque tour, vérifier s'il y a au moins une localisation avec exactement 4 joueur·euses
+exactement_4_meme_loc <- tours_loc %>%
+  filter(nb_joueuses == 4) %>%
+  group_by(id_partie, annee) %>%
+  summarise(
+    a_au_moins_une_loc_avec_4 = any(nb_joueuses == 4),
+    .groups = "drop"
+  ) %>%
+  filter(a_au_moins_une_loc_avec_4) %>%
+  nrow()
+
+# Résultat
+cat("Nombre de tours où TOUTES les joueur·euses sont dans la même localisation :", toutes_meme_loc, "\n")
+cat("Nombre de tours où EXACTEMENT 4 joueur·euses sont dans la même localisation :", exactement_4_meme_loc, "\n")
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################################################
+#  UNE COORDINATION PRINCIPALEMENT IMPLICITE
+##################################################################################
+
+## Evolution de l'indice de couverture spatiale
+library(dplyr)
+library(ggplot2)
+library(lme4)
+
+# Calculer l'indice de couverture spatiale par tour (id_partie + annee)
+indice_couverture <- dd %>%
+  group_by(id_partie, annee) %>%
+  summarise(
+    nb_zones_visitees = n_distinct(localisation),
+    nb_zones_accessibles = 4,  # jaune, vert, rouge, village
+    indice_couverture = nb_zones_visitees / nb_zones_accessibles,
+    .groups = "drop"
+  )
+
+# Evolution de l'indice au fil des tours (annee) et des parties (id_partie)
+model <- lmer(indice_couverture ~ annee + (1 | id_partie), data = indice_couverture)
+summary(model)
+
+# Identifier les parties avec une diminution marquée de la concentration spatiale
+evolution_par_partie <- indice_couverture %>%
+  group_by(id_partie) %>%
+  summarise(
+    indice_debut = first(indice_couverture),
+    indice_fin = last(indice_couverture),
+    delta = indice_fin - indice_debut,
+    .groups = "drop"
+  ) %>%
+  arrange(desc(delta))  # Tri par augmentation de l'indice (dispersion)
+
+# Afficher les parties avec une forte augmentation (dispersion) ou diminution (concentration)
+print(evolution_par_partie)
+
+# Capturer les extrèmes
+evolution_par_partie_corrigee <- indice_couverture %>%
+  group_by(id_partie) %>%
+  summarise(
+    indice_min = min(indice_couverture),  # Concentration maximale
+    indice_max = max(indice_couverture),  # Dispersion maximale
+    delta = indice_max - indice_min,      # Amplitude de variation
+    .groups = "drop"
+  ) %>%
+  arrange(desc(delta))  # Tri par amplitude de variation
+
+print(evolution_par_partie_corrigee)
+
+print(evolution_cibles)
+
+# Visualisation de l'évolution de l'indice par partie
+ggplot(indice_couverture, aes(x = annee, y = indice_couverture, group = id_partie, color = factor(id_partie))) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Évolution de l'indice de couverture spatiale par partie",
+       x = "Année (tour)",
+       y = "Indice de couverture spatiale",
+       color = "Partie") +
+  theme_minimal() +
+  scale_color_discrete(breaks = parties_cibles)  # Mettre en évidence les parties 6, 14, 16
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################################################
+#  UNE COORDINATION SANS LEADERSHIP
+##################################################################################
+
+ordre_jeu <- read_excel(file, sheet = "BDD_peche")
+
+ordre_jeu <- ordre_jeu %>%
+  filter(
+    id_partie %in% 5:16,
+    !id_partie %in% c(11)
+  ) %>%
+  filter(annee <= 8)
+
+
+
+
+
+
+
+
+
+
+
+# Vérifier « une même joueuse occupe la première position pendant au moins la moitié des tours »
+ordre_jeu <- ordre_jeu %>%
+  mutate(
+    premiere = ordre_jeu == 1
+  )
+
+ordre_jeu %>%
+  select(id_partie, annee, nom_joueuse, ordre_jeu, premiere) %>%
+  arrange(id_partie, annee, ordre_jeu)
+
+# même joueur·euse qui joue en première ?
+premiere_par_joueuse <- ordre_jeu %>%
+  group_by(id_partie, nom_joueuse) %>%
+  summarise(
+    nb_tours = n_distinct(annee),
+    nb_fois_premiere = sum(premiere, na.rm = TRUE),
+    proportion_premiere = nb_fois_premiere / nb_tours,
+    .groups = "drop"
+  ) %>%
+  arrange(id_partie, desc(proportion_premiere))
+
+premiere_par_joueuse
+
+premieres_majoritaires <- premiere_par_joueuse %>%
+  filter(proportion_premiere >= 0.5)
+
+premieres_majoritaires
+
+premieres_majoritaires %>%
+  summarise(
+    nb_sessions = n_distinct(id_partie)
+  )
+
+premieres_majoritaires %>%
+  select(
+    id_partie,
+    nom_joueuse,
+    nb_tours,
+    nb_fois_premiere,
+    proportion_premiere
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Vérifier qu'il n'y a qu'une seule joueuse majoritairement première par session
+premiere_par_joueuse <- ordre_jeu %>%
+  group_by(id_partie, nom_joueuse) %>%
+  summarise(
+    nb_tours = n_distinct(annee),
+    nb_fois_premiere = sum(premiere, na.rm = TRUE),
+    proportion_premiere = nb_fois_premiere / nb_tours,
+    .groups = "drop"
+  ) %>%
+  arrange(id_partie, desc(proportion_premiere))
+
+premiere_par_joueuse
+
+premieres_majoritaires <- premiere_par_joueuse %>%
+  filter(proportion_premiere >= 0.5)
+
+premieres_majoritaires
+
+premieres_majoritaires %>%
+  summarise(
+    nb_sessions = n_distinct(id_partie)
+  )
+
+premieres_majoritaires %>%
+  select(
+    id_partie,
+    nom_joueuse,
+    nb_tours,
+    nb_fois_premiere,
+    proportion_premiere
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Graph ordre de jeu
+library(tidyverse)
+library(readxl)
+
+# Charger la base contenant l'ordre de jeu
+ordre_jeu <- read_excel(
+  file,
+  sheet = "BDD_peche"
+)
+
+# Garder les sessions analysées
+
+ordre_jeu <- ordre_jeu %>%
+  filter(
+    id_partie %in% 5:16,
+    id_partie != 11,
+    annee <= 8
+  )
+
+# ordre jeu en variable numérique 
+# Dans la base, ordre_jeu contient :
+# "1", "2", "3", "4", "5", "NA" et des NA
+# On transforme la chaîne "NA" en véritable NA,
+# puis on convertit en numérique.
+ordre_jeu <- ordre_jeu %>%
+  mutate(
+    ordre_jeu_num = as.numeric(
+      na_if(ordre_jeu, "NA")
+    )
+  )
+
+# Vérification doublons
+ordre_jeu %>%
+  count(
+    id_partie,
+    annee,
+    nom_personnage_joueuse,
+    ordre_jeu_num
+  ) %>%
+  filter(n > 1)
+
+# Calculer les statistiques pour chaque personnage joué
+stats_ordre <- ordre_jeu %>%
+  group_by(
+    id_partie,
+    nom_personnage
+  ) %>%
+  summarise(
+    position_moyenne = mean(
+      ordre_jeu_num,
+      na.rm = TRUE
+    ),
+    
+    ecart_type = sd(
+      ordre_jeu_num,
+      na.rm = TRUE
+    ),
+    
+    gains_totaux = sum(
+      quantite,
+      na.rm = TRUE
+    ),
+    
+    statut_familial = first(
+      na.omit(statu_familial)
+    ),
+    
+    village = first(
+      na.omit(village)
+    ),
+    
+    .groups = "drop"
+  ) %>%
+  mutate(
+    initiale_village = str_sub(village, 1, 1),
+    
+    etiquette = paste0(
+      nom_personnage,
+      "_S",
+      id_partie,
+      "_",
+      initiale_village
+    )
+  )
+
+stats_ordre <- stats_ordre %>%
+  mutate(
+    initiale_village = str_sub(village, 1, 1),
+    
+    etiquette = paste0(
+      nom_personnage,
+      "_S",
+      id_partie,
+      "_",
+      initiale_village
+    )
+  )
+
+stats_ordre
+
+# Classer les personnages en 3 catégories de gains
+# ntile() répartit les observations en trois groupes
+# de taille aussi égale que possible
+stats_ordre <- stats_ordre %>%
+  mutate(
+    
+    classe_gains_num = ntile(
+      gains_totaux,
+      3
+    ),
+    
+    classe_gains = case_when(
+      classe_gains_num == 1 ~ "Faibles",
+      classe_gains_num == 2 ~ "Moyens",
+      classe_gains_num == 3 ~ "Élevés"
+    ),
+    
+    classe_gains = factor(
+      classe_gains,
+      levels = c(
+        "Faibles",
+        "Moyens",
+        "Élevés"
+      )
+    )
+  )
+
+table(stats_ordre$classe_gains)
+
+# Vérifier les limites de chaque classe
+stats_ordre %>%
+  group_by(classe_gains) %>%
+  summarise(
+    n = n(),
+    gain_min = min(gains_totaux),
+    gain_max = max(gains_totaux),
+    gain_moyen = mean(gains_totaux),
+    .groups = "drop"
+  )
+
+# Regrouper les statuts familiaux en 5 catégories
+stats_ordre <- stats_ordre %>%
+  mutate(
+    
+    statut_graphique = case_when(
+      
+      # Équipe comprenant un homme
+      str_detect(
+        statut_familial,
+        regex("homme", ignore_case = TRUE)
+      ) ~ "Équipe avec homme",
+      
+      # Équipe comprenant plusieurs statuts familiaux
+      str_detect(
+        statut_familial,
+        regex("&| et ", ignore_case = TRUE)
+      ) ~ "Équipe avec statuts mixtes",
+      
+      # Statuts simples
+      statut_familial == "enfant" ~ "Enfant",
+      
+      statut_familial == "parent" ~ "Parent",
+      
+      statut_familial == "grand_parent" ~ "Grand-parent",
+      
+      TRUE ~ NA_character_
+    ),
+    
+    statut_graphique = factor(
+      statut_graphique,
+      levels = c(
+        "Enfant",
+        "Parent",
+        "Grand-parent",
+        "Équipe avec homme",
+        "Équipe avec statuts mixtes"
+      )
+    )
+  )
+
+
+# Vérifier le regroupement
+table(
+  stats_ordre$statut_familial,
+  stats_ordre$statut_graphique,
+  useNA = "ifany"
+)
+
+# Vérifier les observations utilisées dans le graphique
+stats_ordre %>%
+  summarise(
+    n_total = n(),
+    n_position_moyenne_NA = sum(
+      is.na(position_moyenne)
+    ),
+    n_ecart_type_NA = sum(
+      is.na(ecart_type)
+    ),
+    n_statut_NA = sum(
+      is.na(statut_graphique)
+    )
+  )
+
+# graph
+library(ggrepel)
+
+ggplot(
+  stats_ordre %>%
+    filter(
+      !is.na(position_moyenne),
+      !is.na(ecart_type),
+      !is.na(statut_graphique)
+    ),
+  
+  aes(
+    x = position_moyenne,
+    y = ecart_type,
+    color = statut_graphique,
+    size = classe_gains
+  )
+) +
+  
+  geom_point(
+    alpha = 0.8
+  ) +
+  
+  geom_text_repel(
+    aes(label = etiquette),
+    size = 1.8,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    point.padding = 0.15,
+    segment.color = "grey70",
+    segment.size = 0.2
+  ) +
+  
+  # Axe X : position moyenne
+  scale_x_continuous(
+    breaks = 1:5,
+    limits = c(1, 5)
+  ) +
+  
+  # Taille des points = classe de gains
+  scale_size_manual(
+    values = c(
+      "Faibles" = 3,
+      "Moyens" = 6,
+      "Élevés" = 9
+    ),
+    name = "Quantités de gains totaux"
+  ) +
+  
+  # Couleur = statut familial
+  scale_color_manual(
+    values = c(
+      "Enfant" = "#F5CC27",
+      "Parent" = "#F59827",
+      "Grand-parent" = "#F55E27",
+      "Équipe avec homme" = "#C827F5",
+      "Équipe avec statuts mixtes" = "#5E27F5"
+    ),
+    name = "Statut familial"
+  ) +
+  
+  labs(
+    x = "Position moyenne dans l'ordre de jeu",
+    y = "Écart-type de la position"
+  ) +
+  
+  theme_classic() +
+  
+  theme(
+    legend.position = "right",
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 11),
+    legend.title = element_text(size = 11),
+    legend.text = element_text(size = 10)
+  )
+
+
+
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
