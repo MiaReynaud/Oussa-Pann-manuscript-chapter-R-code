@@ -76,6 +76,19 @@ stock <- stock[
     stock$id_partie != 11,            # enlever partie 11 (seulement 4 joueuses)
 ]
 
+# base ordre de jeu
+ordre_jeu <- read_excel(
+  file,
+  sheet = "BDD_peche"
+)
+
+ordre_jeu <- ordre_jeu %>%
+  filter(
+    id_partie %in% 5:16,
+    id_partie != 11,
+    annee <= 8
+  )
+
 ## selection des donnees
 ## on retire les 2 premières parties, non comparables car règles de jeu différentes, et on retire aussi tous les résultats de simulation
 # personnage avec profils différents pour les parties 1:2
@@ -2981,21 +2994,6 @@ premieres_majoritaires %>%
 library(tidyverse)
 library(readxl)
 
-# Charger la base contenant l'ordre de jeu
-ordre_jeu <- read_excel(
-  file,
-  sheet = "BDD_peche"
-)
-
-# Garder les sessions analysées
-
-ordre_jeu <- ordre_jeu %>%
-  filter(
-    id_partie %in% 5:16,
-    id_partie != 11,
-    annee <= 8
-  )
-
 # ordre jeu en variable numérique 
 # Dans la base, ordre_jeu contient :
 # "1", "2", "3", "4", "5", "NA" et des NA
@@ -3259,12 +3257,461 @@ ggplot(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Nombre de joueur·euses ayant été première à jouer dans chaque partie
+
+premieres_par_partie <- ordre_jeu %>%
+  filter(
+    ordre_jeu == 1
+  ) %>%
+  group_by(id_partie) %>%
+  summarise(
+    nb_joueuses_premieres = n_distinct(nom_personnage_joueuse),
+    .groups = "drop"
+  )
+
+premieres_par_partie
+
+ggplot(
+  premieres_par_partie,
+  aes(
+    x = factor(id_partie),
+    y = nb_joueuses_premieres
+  )
+) +
+  geom_col(
+    fill = "gray",
+    width = 0.7
+  ) +
+  
+  geom_text(
+    aes(label = nb_joueuses_premieres),
+    vjust = -0.3,
+    size = 3.5
+  ) +
+  
+  scale_y_continuous(
+    breaks = 0:5,
+    limits = c(0, 5.5)
+  ) +
+  
+  labs(
+    x = "Session",
+    y = "Nombre de joueur·euses ayant\n été premier·ère à jouer"
+  ) +
+  
+  theme_classic() +
+  
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 11)
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Figure : ordre de choix des zones au cours des sessions
+library(tidyverse)
+library(readxl)
+
+# Transformer l'ordre de jeu en numérique
+ordre_jeu <- ordre_jeu %>%
+  mutate(
+    ordre_jeu_num = as.numeric(
+      na_if(ordre_jeu, "NA")
+    )
+  )
+
+# Calculer la taille maximale disponible
+# Pour chaque session, tour et zone :
+# on garde la classe_taille la plus élevée
+# parmi les lignes où la quantité disponible est > 0.
+
+taille_max <- taille %>%
+  filter(
+    !is.na(classe_taille),
+    !is.na(quantite),
+    quantite != 0
+  ) %>%
+  group_by(
+    id_partie,
+    annee,
+    id_localisation
+  ) %>%
+  summarise(
+    taille_max = max(
+      classe_taille,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+# Préparer les données de la figure
+
+figure_ordre <- ordre_jeu %>%
+  filter(
+    !is.na(ordre_jeu_num),
+    !is.na(localisation),
+    !is.na(id_localisation)
+  ) %>%
+  
+  left_join(
+    taille_max,
+    by = c(
+      "id_partie",
+      "annee",
+      "id_localisation"
+    )
+  ) %>%
+  
+  mutate(
+    initiale_village = str_sub(
+      village,
+      1,
+      1
+    ),
+    
+    session = paste0(
+      "S",
+      id_partie,
+      initiale_village
+    )
+  )
+
+# Ordre des sessions
+ordre_sessions <- figure_ordre %>%
+  distinct(
+    id_partie,
+    session
+  ) %>%
+  arrange(id_partie) %>%
+  pull(session)
+
+
+figure_ordre <- figure_ordre %>%
+  mutate(
+    session = factor(
+      session,
+      levels = ordre_sessions
+    ),
+    
+    # 1 en haut -> 8 en bas
+    tour = factor(
+      annee,
+      levels = 8:1
+    )
+  )
+
+
+# Vérifications
+# Voir les sessions
+figure_ordre %>%
+  distinct(
+    id_partie,
+    village,
+    session
+  ) %>%
+  arrange(id_partie)
+
+
+# Voir les tailles disponibles
+table(
+  figure_ordre$taille_max,
+  useNA = "ifany"
+)
+
+
+# Vérifier les valeurs de localisation
+unique(figure_ordre$localisation)
+
+
+# Ordonner les sessions
+ordre_sessions <- figure_ordre %>%
+  distinct(
+    id_partie,
+    session
+  ) %>%
+  arrange(id_partie) %>%
+  pull(session)
+
+
+figure_ordre <- figure_ordre %>%
+  mutate(
+    session = factor(
+      session,
+      levels = ordre_sessions
+    ),
+    
+    # Tour 1 en haut et tour 8 en bas
+    tour = factor(
+      annee,
+      levels = 1:8
+    )
+  )
+
+
+# Graphique
+ggplot(
+  figure_ordre,
+  aes(
+    x = ordre_jeu_num,
+    y = tour
+  )
+) +
+  
+  # ----------------------------------------------------------
+# Barre colorée correspondant à la zone choisie
+# ----------------------------------------------------------
+
+geom_tile(
+  aes(
+    fill = localisation
+  ),
+  width = 0.90,
+  height = 4.0
+) +
+  
+  # ----------------------------------------------------------
+# Point noir au centre de la barre
+# Taille = classe de taille du coquillage
+# ----------------------------------------------------------
+
+geom_point(
+  aes(
+    size = taille_max
+  ),
+  shape = 16,
+  color = "black"
+) +
+  
+  # ----------------------------------------------------------
+# Une colonne par session
+# ----------------------------------------------------------
+
+facet_grid(
+  rows = vars(tour),
+  cols = vars(session)
+) +
+  
+  # ----------------------------------------------------------
+# Positions de jeu 1 à 5
+# ----------------------------------------------------------
+
+scale_x_continuous(
+  breaks = 1:5,
+  limits = c(0.5, 5.5)
+) +
+  
+  # ----------------------------------------------------------
+# Taille des points = classe de taille
+# ----------------------------------------------------------
+
+scale_size_continuous(
+  breaks = 1:4,
+  range = c(0.1, 2),
+  limits = c(1, 4),
+  name = "Classe de taille\nde coquillage\nmaximale disponible"
+) +
+  
+  # ----------------------------------------------------------
+# Couleur des zones
+# ----------------------------------------------------------
+
+scale_fill_manual(
+  values = c(
+    "jaune" = "#F5D547",
+    "vert" = "#4DAF4A",
+    "rouge" = "#E41A1C"
+  ),
+  name = "Zone choisie"
+) +
+  
+  labs(
+    x = "Position dans l'ordre de jeu",
+    y = "Tour"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    panel.grid = element_blank(),
+    
+    # titres S5N, S6N...
+    strip.text.x = element_text(
+      size = 9,
+      face = "bold"
+    ),
+    
+    # numéro des tours
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold"
+    ),
+    
+    axis.text.x = element_text(
+      size = 8
+    ),
+    
+    axis.text.y = element_blank(),
+    
+    axis.ticks.y = element_blank(),
+    
+    axis.title = element_text(
+      size = 11
+    ),
+    
+    legend.title = element_text(
+      size = 10
+    ),
+    
+    legend.text = element_text(
+      size = 9
+    ),
+    
+    panel.spacing = unit(
+      0.15,
+      "lines"
+    )
+  )
+
+
 #
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################################################################
+##################################################################################
+##################################################################################
+## DIFFERENCES ENTRE LES VILLAGES
+##################################################################################
+##################################################################################
+##################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
 
 
 
