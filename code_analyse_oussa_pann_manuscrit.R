@@ -3699,6 +3699,264 @@ scale_fill_manual(
 ##################################################################################
 ##################################################################################
 
+# FIGURE . Différence d'utilisation des zones : Niodior - Falia
+library(tidyverse)
+
+# Préparer les deux jeux de données
+d_annee1 <- d %>%
+  filter(
+    village %in% c("Niodior", "Falia"),
+    localisation %in% c("jaune", "vert", "rouge", "village"),
+    !is.na(localisation),
+    annee == 1
+  ) %>%
+  mutate(
+    periode = "Tour 1"
+  )
+
+d_annees2_8 <- d %>%
+  filter(
+    village %in% c("Niodior", "Falia"),
+    localisation %in% c("jaune", "vert", "rouge", "village"),
+    !is.na(localisation),
+    annee >= 2,
+    annee <= 8
+  ) %>%
+  mutate(
+    periode = "Tours 2–8"
+  )
+
+d_figure <- bind_rows(
+  d_annee1,
+  d_annees2_8
+)
+
+# Calcul des pourcentages d'utilisation
+prop_utilisation <- d_figure %>%
+  count(
+    periode,
+    village,
+    localisation,
+    name = "n"
+  ) %>%
+  group_by(
+    periode,
+    village
+  ) %>%
+  mutate(
+    pourcentage = 100 * n / sum(n)
+  ) %>%
+  ungroup()
+
+
+# Calcul de la différence Niodior - Falia
+diff_utilisation <- prop_utilisation %>%
+  select(
+    periode,
+    village,
+    localisation,
+    pourcentage
+  ) %>%
+  pivot_wider(
+    names_from = village,
+    values_from = pourcentage,
+    values_fill = 0
+  ) %>%
+  mutate(
+    difference = Niodior - Falia
+  )
+
+
+# Mise en forme
+diff_utilisation <- diff_utilisation %>%
+  mutate(
+    
+    localisation = factor(
+      localisation,
+      levels = c(
+        "jaune",
+        "vert",
+        "rouge",
+        "village"
+      ),
+      labels = c(
+        "Jaune",
+        "Vert",
+        "Rouge",
+        "Village"
+      )
+    ),
+    
+    periode = factor(
+      periode,
+      levels = c(
+        "Tour 1",
+        "Tours 2–8"
+      )
+    )
+  )
+
+
+# Figure
+ggplot(
+  diff_utilisation,
+  aes(
+    x = difference,
+    y = localisation,
+    colour = localisation
+  )
+) +
+  
+  # Ligne = absence de différence
+  geom_vline(
+    xintercept = 0,
+    colour = "grey30",
+    linewidth = 0.7
+  ) +
+  
+  # Segment entre 0 et la différence
+  geom_segment(
+    aes(
+      x = 0,
+      xend = difference,
+      y = localisation,
+      yend = localisation
+    ),
+    linewidth = 1.2,
+    colour = "grey70"
+  ) +
+  
+  # Points
+  geom_point(
+    size = 5
+  ) +
+  
+  # Valeurs
+  geom_text(
+    aes(
+      label = sprintf(
+        "%+.1f",
+        difference
+      )
+    ),
+    hjust = ifelse(
+      diff_utilisation$difference >= 0,
+      -0.4,
+      1.4
+    ),
+    size = 3.8,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  
+  # Deux panneaux
+  facet_wrap(
+    ~ periode,
+    nrow = 1
+  ) +
+  
+  # Couleurs des zones
+  scale_colour_manual(
+    values = c(
+      "Jaune"   = "#D4A72C",
+      "Vert"    = "#4C956C",
+      "Rouge"   = "#C8553D",
+      "Village" = "#80644B"
+    )
+  ) +
+  
+  # Même échelle pour les deux panneaux
+  scale_x_continuous(
+    name = "Différence d'utilisation : Niodior − Falia\n(points de pourcentage)",
+    breaks = seq(-30, 30, 5),
+    limits = c(-31, 31),
+    minor_breaks = NULL,
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  
+  scale_y_discrete(
+    name = NULL
+  ) +
+  
+  # Thème
+  theme_classic(
+    base_size = 13
+  ) +
+  
+  theme(
+    
+    legend.position = "none",
+    
+    strip.background = element_blank(),
+    
+    strip.text = element_text(
+      size = 13,
+      face = "bold",
+      colour = "grey15"
+    ),
+    
+    panel.grid.major.x = element_line(
+      colour = "grey92",
+      linewidth = 0.35
+    ),
+    
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    
+    axis.text.y = element_text(
+      size = 11,
+      colour = "grey15"
+    ),
+    
+    axis.text.x = element_text(
+      size = 9,
+      colour = "grey30"
+    ),
+    
+    axis.title.x = element_text(
+      size = 11,
+      colour = "grey15",
+      margin = margin(t = 10)
+    ),
+    
+    panel.spacing = unit(
+      2,
+      "lines"
+    ),
+    
+    plot.margin = margin(
+      10, 20, 10, 10
+    )
+  )
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Pénibilité moyenne selon le tour de jeu et le village
 library(ggplot2)
 library(dplyr)
@@ -3802,6 +4060,173 @@ fig_penibilite
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Analyse stat : recours aux activités villageoises
+library(tidyverse)
+
+# Préparation des données
+df_village <- d %>%
+  filter(
+    village %in% c("Niodior", "Falia"),
+    annee >= 1,
+    annee <= 8,
+    !is.na(localisation)
+  ) %>%
+  mutate(
+    periode = case_when(
+      annee <= 3 ~ "Avant le 4e tour",
+      annee >= 4 ~ "À partir du 4e tour"
+    ),
+    
+    activite_village = if_else(
+      localisation == "village",
+      "Village",
+      "Autres zones"
+    )
+  )
+
+
+# Effectifs et pourcentages
+tab_village <- df_village %>%
+  count(
+    village,
+    periode,
+    activite_village,
+    name = "n"
+  ) %>%
+  group_by(
+    village,
+    periode
+  ) %>%
+  mutate(
+    total = sum(n),
+    pourcentage = 100 * n / total
+  ) %>%
+  ungroup()
+
+# Afficher le tableau complet
+tab_village
+
+
+# Tableau uniquement pour les activités villageoises
+tab_pourcentage_village <- tab_village %>%
+  filter(
+    activite_village == "Village"
+  ) %>%
+  select(
+    village,
+    periode,
+    n,
+    total,
+    pourcentage
+  ) %>%
+  arrange(
+    periode,
+    village
+  )
+
+tab_pourcentage_village
+
+
+# Présentation sous forme de tableau large
+tab_village_large <- tab_pourcentage_village %>%
+  select(
+    village,
+    periode,
+    pourcentage
+  ) %>%
+  pivot_wider(
+    names_from = periode,
+    values_from = pourcentage
+  )
+
+tab_village_large
+
+
+# Test du Chi²
+tab_chi2 <- df_village %>%
+  count(
+    village,
+    activite_village
+  ) %>%
+  pivot_wider(
+    names_from = activite_village,
+    values_from = n,
+    values_fill = 0
+  ) %>%
+  column_to_rownames("village") %>%
+  as.matrix()
+
+tab_chi2
+
+test_chi2 <- chisq.test(tab_chi2)
+
+test_chi2
+
+
+# Afficher proprement les résultats du Chi²
+cat(
+  "\nChi² =", round(test_chi2$statistic, 2),
+  "\ndf =", test_chi2$parameter,
+  "\np =", round(test_chi2$p.value, 3),
+  "\n"
+)
+
+
+# Test avec correction de Yates
+test_chi2_yates <- chisq.test(
+  tab_chi2,
+  correct = TRUE
+)
+
+test_chi2_yates
+
+
+# Comparaison Falia / Niodior pour chaque période
+for (p in unique(df_village$periode)) {
+  
+  cat("\n\n==============================")
+  cat("\n", p)
+  cat("\n==============================\n")
+  
+  tab <- df_village %>%
+    filter(periode == p) %>%
+    count(
+      village,
+      activite_village
+    ) %>%
+    pivot_wider(
+      names_from = activite_village,
+      values_from = n,
+      values_fill = 0
+    ) %>%
+    column_to_rownames("village") %>%
+    as.matrix()
+  
+  print(tab)
+  
+  print(
+    chisq.test(tab)
+  )
+}
+#
 
 
 
