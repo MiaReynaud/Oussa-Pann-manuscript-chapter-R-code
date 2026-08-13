@@ -4278,6 +4278,304 @@ for (p in unique(df_village$periode)) {
 
 
 
+##################################################################################
+##################################################################################
+##################################################################################
+## EVALUATION PAR LES PARTICIPANT·ES
+##################################################################################
+##################################################################################
+##################################################################################
+
+
+
+
+
+
+
+
+##################################################################################
+##################################################################################
+##################################################################################
+## EXPLORATIONS DU JEU AVEC LE SMA
+##################################################################################
+##################################################################################
+##################################################################################
+
+
+# STOCK TOTAL PAR PARTIE, VILLAGE ET TOUR DE JEU
+stock_tutti <- read_excel(file, sheet = "BDD_stock_SMA")
+
+stock_plot <- stock_tutti %>%
+  filter(
+    id_partie %in% 3:46,
+    annee %in% 1:8,
+    classe_taille %in% 1:4,
+    localisation %in% c("jaune", "vert", "rouge"),
+    village %in% c("Falia", "Niodior", "sma_aleatoire")
+  ) %>%
+  group_by(village, id_partie, annee) %>%
+  summarise(
+    stock_total = sum(quantite, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# mse en forme
+stock_plot <- stock_plot %>%
+  mutate(
+    village = factor(
+      village,
+      levels = c("Falia", "Niodior", "sma_aleatoire"),
+      labels = c("Falia", "Niodior", "SMA")
+    ),
+    annee = factor(
+      annee,
+      levels = 1:8
+    ),
+    id_partie = factor(
+      id_partie,
+      levels = 3:46
+    )
+  )
+
+stock_tutti %>%
+  count(village, id_partie, annee) %>%
+  print(n = 100)
+
+# figure
+p_stock <- ggplot(
+  stock_plot,
+  aes(
+    x = annee,
+    y = stock_total,
+    group = id_partie
+  )
+) +
+  
+  geom_line(
+    linewidth = 0.7,
+    colour = "grey50",
+    alpha = 0.7
+  ) +
+  
+  geom_point(
+    size = 1.5,
+    colour = "grey50",
+    alpha = 0.7
+  ) +
+  
+  facet_wrap(
+    ~ village,
+    nrow = 1
+  ) +
+  
+  scale_x_discrete(
+    drop = FALSE
+  ) +
+  
+  labs(
+    x = "Tour de jeu",
+    y = "Stock total de coquillages"
+  ) +
+  
+  theme_classic(
+    base_size = 13
+  ) +
+  
+  theme(
+    strip.background = element_blank(),
+    
+    strip.text = element_text(
+      face = "bold",
+      size = 15
+    ),
+    
+    axis.title = element_text(
+      face = "bold"
+    ),
+    
+    axis.text = element_text(
+      colour = "black"
+    ),
+    
+    legend.position = "none"
+  )
+
+p_stock
+
+
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
